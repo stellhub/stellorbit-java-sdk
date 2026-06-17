@@ -1,4 +1,4 @@
-package io.github.stellhub.stellorbit.client;
+package io.github.stellorbit.client;
 
 public class StellorbitClientException extends RuntimeException {
 

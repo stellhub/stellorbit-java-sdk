@@ -1,8 +1,8 @@
-package io.github.stellhub.stellorbit.client;
+package io.github.stellorbit.client;
 
-import io.github.stellhub.stellorbit.client.internal.Jsons;
-import io.github.stellhub.stellorbit.client.model.ApiResponse;
-import io.github.stellhub.stellorbit.client.model.RouteRequest;
+import io.github.stellorbit.client.internal.Jsons;
+import io.github.stellorbit.client.model.ApiResponse;
+import io.github.stellorbit.client.model.RouteRequest;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -12,7 +12,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-public final class StellorbitHttpClient implements StellorbitClient {
+public final class StellorbitHttpClient implements StellorbitRemoteClient {
 
     private static final String API_KEY_HEADER = "X-Stellorbit-Api-Key";
 
@@ -21,6 +21,7 @@ public final class StellorbitHttpClient implements StellorbitClient {
 
     public StellorbitHttpClient(StellorbitClientOptions options) {
         this.options = Objects.requireNonNull(options, "options must not be null");
+        Objects.requireNonNull(options.endpoint(), "endpoint must not be null");
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(options.connectTimeout())
                 .build();

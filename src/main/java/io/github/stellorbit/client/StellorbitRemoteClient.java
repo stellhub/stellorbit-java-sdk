@@ -1,12 +1,12 @@
-package io.github.stellhub.stellorbit.client;
+package io.github.stellorbit.client;
 
-import io.github.stellhub.stellorbit.client.model.ApiResponse;
-import io.github.stellhub.stellorbit.client.model.RouteRequest;
+import io.github.stellorbit.client.model.ApiResponse;
+import io.github.stellorbit.client.model.RouteRequest;
 
-public interface StellorbitClient extends AutoCloseable {
+public interface StellorbitRemoteClient extends AutoCloseable {
 
     /**
-     * 请求服务路由决策。
+     * 请求服务端路由决策。
      */
     ApiResponse route(RouteRequest request);
 

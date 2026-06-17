@@ -1,6 +1,6 @@
-package io.github.stellhub.stellorbit.client.internal;
+package io.github.stellorbit.client.internal;
 
-import io.github.stellhub.stellorbit.client.model.RouteRequest;
+import io.github.stellorbit.client.model.RouteRequest;
 import java.util.Map;
 
 public final class Jsons {

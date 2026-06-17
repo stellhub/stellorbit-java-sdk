@@ -1,4 +1,4 @@
-package io.github.stellhub.stellorbit.client.model;
+package io.github.stellorbit.client.model;
 
 public record ApiResponse(int statusCode, String body) {
 
