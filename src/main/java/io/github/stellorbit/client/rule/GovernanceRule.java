@@ -45,6 +45,16 @@ public record GovernanceRule(
         return "*".equals(targetService) || targetService.equals(serviceName);
     }
 
+    /**
+     * 判断规则是否来自指定配置项。
+     */
+    public boolean fromConfig(String configId) {
+        if (configId == null || configId.isBlank()) {
+            return false;
+        }
+        return ruleId.equals(configId) || configKey.equals(configId);
+    }
+
     private static String requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " must not be blank");

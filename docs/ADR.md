@@ -88,25 +88,27 @@ Spring Boot 接入不做单一大而全 starter，后续按治理能力拆成四
 
 ### 规则通道
 
-SDK 只订阅 `governance/service-governance` 下的治理规则。第一阶段默认订阅该 group 下全部配置，后续可在规则数量较大时收敛为按 `configId` 或服务维度订阅。
+SDK 只订阅 `governance/service-governance` 下的治理规则。服务端当前按应用和规则类型发布固定聚合配置，`configId` 形如 `stellorbit.<application>.<rule-type>`，例如 `stellorbit.payment-service.route`。每个配置值包含聚合 payload、`rules[]` 明细列表，以及用于服务端 validator 校验的类型字段，例如 `routes`、`breaker`、`limit` 或 `auth`。
 
 规则映射关系如下：
 
 | StellNula 字段 | StellOrbit 语义 |
 | --- | --- |
-| `configId` | `ruleId` |
+| `configId` | 聚合配置 ID，不再等同于单条规则 ID |
 | `configKey` | 规则读取 key 或文件路径 |
-| `configValue` | 规则 JSON 内容 |
+| `configValue` | 聚合规则 JSON 内容 |
 | `contentType` | 规则内容类型，当前按 `json` 解析 |
 | `revision` | 规则版本水位 |
 | `checksum` | 当前规则集合一致性校验 |
 | `env/region/zone/cluster` | 规则生效范围 |
 
+聚合 payload 内部的 `rules[].ruleId` 才是客户端本地 `GovernanceRule.ruleId`。客户端只接受该聚合 schema，解析时会把单个聚合配置展开为多条本地规则，并把这些规则关联回来源 `configId`，用于删除、更新失败 fallback 和 last-known-good 处理。
+
 SDK 不直接依赖数据库表，也不直接调用 `GovernanceRuleController` 的管理接口来轮询规则。管理接口只属于控制面或测试工具。
 
 ### 本地规则模型
 
-SDK 内部需要引入统一的规则 envelope，将配置中心条目转换成强类型规则：
+SDK 内部需要引入统一的规则 envelope，将配置中心聚合条目中的 `rules[]` 转换成强类型规则：
 
 - `ruleId`
 - `ruleName`

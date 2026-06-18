@@ -15,6 +15,7 @@ import io.github.stellorbit.client.rule.GovernanceRuleParser;
 import io.github.stellorbit.client.rule.GovernanceRuleRegistry;
 import io.github.stellorbit.client.source.InMemoryGovernanceRuleSource;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class DefaultStellorbitClientTest {
     void providesRouteRulesByConditions() {
         GovernanceRule rule = rule(
                 "route-payment",
+                "ROUTE",
                 """
                 {
                   "ruleType": "ROUTE",
@@ -64,6 +66,7 @@ class DefaultStellorbitClientTest {
     void providesAuthorizationRulesWithoutExecutingAuth() {
         GovernanceRule rule = rule(
                 "auth-payment",
+                "AUTH",
                 """
                 {
                   "ruleType": "AUTH",
@@ -96,6 +99,7 @@ class DefaultStellorbitClientTest {
     void matchesAuthorizationRulesWithMultiValueRoles() {
         GovernanceRule rule = rule(
                 "auth-payment",
+                "AUTH",
                 """
                 {
                   "ruleType": "AUTH",
@@ -131,6 +135,7 @@ class DefaultStellorbitClientTest {
     void routeAttributesCannotOverrideServiceName() {
         GovernanceRule rule = rule(
                 "route-payment",
+                "ROUTE",
                 """
                 {
                   "ruleType": "ROUTE",
@@ -167,6 +172,7 @@ class DefaultStellorbitClientTest {
     void providesRateLimitRulesWithoutLocalLimiter() {
         GovernanceRule rule = rule(
                 "rate-payment",
+                "RATE_LIMIT",
                 """
                 {
                   "ruleType": "RATE_LIMIT",
@@ -197,6 +203,7 @@ class DefaultStellorbitClientTest {
     void providesCircuitBreakerRulesWithoutStateMachine() {
         GovernanceRule rule = rule(
                 "breaker-payment",
+                "CIRCUIT_BREAKER",
                 """
                 {
                   "ruleType": "CIRCUIT_BREAKER",
@@ -225,12 +232,56 @@ class DefaultStellorbitClientTest {
         return new DefaultStellorbitClient(new InMemoryGovernanceRuleSource(registry));
     }
 
-    private GovernanceRule rule(String ruleId, String content) {
-        return parser.parse(new StellnulaConfigEntry(
+    private GovernanceRule rule(String ruleId, String ruleType, String content) {
+        String configId = "stellorbit.payment-service." + ruleType.toLowerCase(Locale.ROOT);
+        String aggregateContent = """
+                {
+                  "schemaVersion": "stellorbit.governance.aggregate.v1",
+                  "releaseVersion": 1,
+                  "generatedAt": "2026-06-18T00:00:00+08:00",
+                  "applicationCode": "payment-service",
+                  "configId": "%s",
+                  "ruleType": "%s",
+                  "sourceRuleType": "%s",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 0,
+                  "releaseName": "test-release",
+                  "runtimeFormat": "JSON",
+                  "ruleCount": 1,
+                  "rules": [
+                    {
+                      "ruleId": "%s",
+                      "configId": "%s",
+                      "ruleType": "%s",
+                      "stellnulaRuleType": "%s",
+                      "ruleCode": "%s",
+                      "ruleName": "%s",
+                      "schemaVersion": "stellorbit.governance.v1",
+                      "checksum": "rule-checksum",
+                      "content": %s
+                    }
+                  ],
+                  "%s": [],
+                  "checksum": "aggregate-checksum"
+                }
+                """.formatted(
+                configId,
+                ruleType,
+                ruleType,
                 ruleId,
-                ruleId + ".json",
-                "FILE",
+                configId,
+                ruleType,
+                ruleType,
+                ruleId,
+                ruleId,
                 content,
+                validatorField(ruleType));
+        return parser.parse(new StellnulaConfigEntry(
+                configId,
+                configId + ".json",
+                "FILE",
+                aggregateContent,
                 1,
                 1,
                 false,
@@ -241,8 +292,19 @@ class DefaultStellorbitClientTest {
                 null,
                 "identity",
                 "INLINE",
-                content.length(),
+                aggregateContent.length(),
                 "",
                 new StellnulaConfigScope("dev", "default", "default", "default")), "test");
+    }
+
+    private String validatorField(String ruleType) {
+        return switch (ruleType) {
+            case "ROUTE" -> "routes";
+            case "RATE_LIMIT" -> "limit";
+            case "CIRCUIT_BREAKER" -> "breaker";
+            case "AUTH" -> "auth";
+            case "DEGRADE" -> "degrade";
+            default -> throw new IllegalArgumentException("unsupported rule type: " + ruleType);
+        };
     }
 }

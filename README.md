@@ -217,28 +217,59 @@ and rule id ascending.
 
 ## Rule Format
 
-Each StellNula config entry contains one governance rule as JSON. The parser
-requires a common envelope and one rule-type-specific payload.
+`stellorbit-service` publishes fixed type-level StellNula configs. The `configId`
+is stable for each application and rule type, for example
+`stellorbit.payment-service.route`. Each config value is an aggregate payload
+that contains release metadata, a typed validator payload, and a `rules` array.
+
+The SDK requires this aggregate schema and expands `rules[]` into individual
+local `GovernanceRule` objects.
 
 ```json
 {
-  "ruleName": "payment-gray-route",
+  "schemaVersion": "stellorbit.governance.aggregate.v1",
+  "releaseVersion": 7,
+  "applicationCode": "payment-service",
+  "configId": "stellorbit.payment-service.route",
   "ruleType": "ROUTE",
   "targetService": "payment-service",
   "status": "ACTIVE",
   "priority": 10,
-  "conditions": {
-    "tenantId": {
-      "in": ["tenant-a", "tenant-b"]
-    },
-    "trafficTag": "gray"
-  },
-  "routes": [
+  "ruleCount": 1,
+  "rules": [
     {
-      "target": "payment-service-gray",
-      "weight": 100
+      "ruleId": "route-a",
+      "ruleCode": "route-a",
+      "ruleName": "Route A",
+      "targetService": "payment-service",
+      "status": "ACTIVE",
+      "priority": 10,
+      "content": {
+        "ruleType": "ROUTE",
+        "targetService": "payment-service",
+        "status": "ACTIVE",
+        "priority": 10,
+        "conditions": {
+          "trafficTag": "gray"
+        },
+        "routes": [
+          {
+            "target": "payment-service-gray",
+            "weight": 100
+          }
+        ]
+      }
     }
-  ]
+  ],
+  "routes": [
+    [
+      {
+        "target": "payment-service-gray",
+        "weight": 100
+      }
+    ]
+  ],
+  "checksum": "aggregate-checksum"
 }
 ```
 

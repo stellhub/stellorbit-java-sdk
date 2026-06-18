@@ -42,19 +42,19 @@ final class GovernanceRuleSnapshotParser {
         for (StellnulaConfigEntry entry : snapshot.entries()) {
             if (entry.deleted()) {
                 hasDeletedEntry = true;
-                previousRules.remove(entry.configId());
+                removePreviousRules(previousRules, entry.configId());
                 continue;
             }
             hasNonDeletedEntry = true;
             try {
-                GovernanceRule rule = parser.parse(entry, snapshot.checksum());
-                parsed.add(rule);
-                previousRules.remove(rule.ruleId());
+                List<GovernanceRule> rules = parser.parseAll(entry, snapshot.checksum());
+                removePreviousRules(previousRules, entry.configId());
+                parsed.addAll(rules);
             } catch (RuntimeException ex) {
                 hasInvalidEntry = true;
-                GovernanceRule fallback = previousRules.remove(entry.configId());
-                if (fallback != null) {
-                    parsed.add(fallback);
+                List<GovernanceRule> fallbackRules = removePreviousRules(previousRules, entry.configId());
+                if (!fallbackRules.isEmpty()) {
+                    parsed.addAll(fallbackRules);
                 } else {
                     LOGGER.log(
                             Level.WARNING,
@@ -81,5 +81,18 @@ final class GovernanceRuleSnapshotParser {
             indexed.put(rule.ruleId(), rule);
         }
         return indexed;
+    }
+
+    private List<GovernanceRule> removePreviousRules(Map<String, GovernanceRule> previousRules, String configId) {
+        List<GovernanceRule> removed = new ArrayList<>();
+        var iterator = previousRules.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, GovernanceRule> entry = iterator.next();
+            if (entry.getValue().fromConfig(configId)) {
+                removed.add(entry.getValue());
+                iterator.remove();
+            }
+        }
+        return removed;
     }
 }
