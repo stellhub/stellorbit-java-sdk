@@ -193,6 +193,14 @@ public class StellorbitExample {
 
 Provider 只返回启用状态的规则，并按 priority 升序、revision 降序、rule id 升序排序。
 
+`RateLimitRuleProvider` 会在规则数据层识别企业级限流契约。
+`RateLimitRuleQuery` 可按 `limitMode`、`limitType`、`trafficProtocol`、
+`executionLocation`、`coordinationMode` 和 `keyExtractor.keys.source` 过滤。
+Provider 还提供 `distributed()`、`localRuntime()`、`httpHeader()`、
+`grpcMetadata()` helper，`RateLimitRules` 提供 `isDistributedRule()`、
+`limitMode()` 等稳定字段读取方法。这些 API 只负责分类和暴露规则，不执行令牌桶、
+并发租约、自定义策略或模型限流。
+
 ## 规则格式
 
 `stellorbit-service` 现在按应用和规则类型发布固定的 StellNula 配置。`configId`

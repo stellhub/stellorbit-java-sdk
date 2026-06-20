@@ -65,6 +65,23 @@ class GovernanceRuleSnapshotParserTest {
     }
 
     @Test
+    void keepsPreviousRateLimitRulesWhenLimitModeIsUnsupported() {
+        GovernanceRuleRegistry previous = snapshotParser.parse(new StellnulaSnapshot(1, "previous", List.of(entry(
+                "stellorbit.payment-service.rate-limit",
+                false,
+                rateLimitAggregateContent(aggregateRateLimitRule("rate-legacy", ""))))), GovernanceRuleRegistry.empty());
+        StellnulaSnapshot snapshot = new StellnulaSnapshot(2, "next", List.of(entry(
+                "stellorbit.payment-service.rate-limit",
+                false,
+                rateLimitAggregateContent(aggregateRateLimitRule("rate-unknown", "\"limitMode\": \"UNKNOWN_MODE\",")))));
+
+        GovernanceRuleRegistry next = snapshotParser.parse(snapshot, previous);
+
+        assertEquals(1, next.rules().size());
+        assertTrue(next.findById("rate-legacy").isPresent());
+    }
+
+    @Test
     void ignoresEmptyAggregatedRuleConfig() {
         StellnulaSnapshot snapshot = new StellnulaSnapshot(2, "aggregate", List.of(entry(
                 "stellorbit.payment-service.route",
@@ -186,5 +203,58 @@ class GovernanceRuleSnapshotParserTest {
                   }
                 }
                 """.formatted(ruleId, ruleId, ruleId);
+    }
+
+    private String rateLimitAggregateContent(String rulePayload) {
+        return """
+                {
+                  "schemaVersion": "stellorbit.governance.aggregate.v1",
+                  "releaseVersion": 7,
+                  "generatedAt": "2026-06-17T10:15:30+08:00",
+                  "applicationCode": "payment-service",
+                  "configId": "stellorbit.payment-service.rate-limit",
+                  "ruleType": "RATE_LIMIT",
+                  "sourceRuleType": "RATE_LIMIT",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 10,
+                  "releaseName": "release-7",
+                  "runtimeFormat": "JSON",
+                  "ruleCount": 1,
+                  "rules": [%s],
+                  "limit": [],
+                  "checksum": "aggregate-checksum"
+                }
+                """.formatted(rulePayload);
+    }
+
+    private String aggregateRateLimitRule(String ruleId, String extraFields) {
+        return """
+                {
+                  "ruleId": "%s",
+                  "configId": "stellorbit.payment-service.rate-limit",
+                  "ruleType": "RATE_LIMIT",
+                  "stellnulaRuleType": "RATE_LIMIT",
+                  "ruleCode": "%s",
+                  "ruleName": "Rate Limit %s",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 10,
+                  "draftVersion": 3,
+                  "schemaVersion": "stellorbit.governance.v1",
+                  "checksum": "rule-checksum",
+                  "content": {
+                    "ruleType": "RATE_LIMIT",
+                    "targetService": "payment-service",
+                    "status": "ACTIVE",
+                    "priority": 10,
+                    %s
+                    "limit": {
+                      "quota": 100,
+                      "windowSeconds": 60
+                    }
+                  }
+                }
+                """.formatted(ruleId, ruleId, ruleId, extraFields);
     }
 }

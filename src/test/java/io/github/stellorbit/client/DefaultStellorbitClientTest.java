@@ -13,6 +13,7 @@ import io.github.stellorbit.client.model.RouteRuleQuery;
 import io.github.stellorbit.client.rule.GovernanceRule;
 import io.github.stellorbit.client.rule.GovernanceRuleParser;
 import io.github.stellorbit.client.rule.GovernanceRuleRegistry;
+import io.github.stellorbit.client.rule.RateLimitRules;
 import io.github.stellorbit.client.source.InMemoryGovernanceRuleSource;
 import java.util.List;
 import java.util.Locale;
@@ -196,6 +197,234 @@ class DefaultStellorbitClientTest {
 
             assertEquals(1, rules.size());
             assertEquals("rate-payment", rules.getFirst().ruleId());
+        }
+    }
+
+    @Test
+    void filtersEnterpriseRateLimitRulesByNewContractFields() {
+        GovernanceRule httpHeaderRule = rule(
+                "rate-http-header",
+                "RATE_LIMIT",
+                """
+                {
+                  "ruleType": "RATE_LIMIT",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 0,
+                  "limitMode": "HEADER",
+                  "limitType": "HEADER",
+                  "limitAlgorithm": "SLIDING_WINDOW",
+                  "trafficProtocol": "HTTP",
+                  "executionLocation": "APPLICATION",
+                  "coordinationMode": "GLOBAL_QUOTA",
+                  "targetSelector": {
+                    "services": ["payment-service"]
+                  },
+                  "requestMatcher": {
+                    "paths": ["/pay"]
+                  },
+                  "keyExtractor": {
+                    "keys": [
+                      {
+                        "name": "tenant-header",
+                        "source": "HEADER",
+                        "key": "X-Tenant-Id",
+                        "required": true,
+                        "normalize": "LOWERCASE"
+                      }
+                    ]
+                  },
+                  "dimensions": ["tenantId", "path"],
+                  "quotaConfig": {
+                    "quota": 1000
+                  },
+                  "windowConfig": {
+                    "windowSeconds": 60
+                  },
+                  "burstConfig": {
+                    "burst": 100
+                  },
+                  "concurrencyConfig": {
+                    "maxConcurrent": 20
+                  },
+                  "hotspotConfig": {
+                    "topN": 50
+                  },
+                  "customPolicy": {
+                    "type": "EXPRESSION"
+                  },
+                  "modelLimitConfig": {
+                    "maxTokens": 10000
+                  },
+                  "fallbackPolicy": {
+                    "failPolicy": "FAIL_OPEN"
+                  },
+                  "responsePolicy": {
+                    "status": 429
+                  },
+                  "observabilityConfig": {
+                    "metrics": true
+                  },
+                  "shadowConfig": {
+                    "enabled": false
+                  },
+                  "limit": {
+                    "quota": 1000,
+                    "windowSeconds": 60
+                  }
+                }
+                """);
+        GovernanceRule grpcHeaderRule = rule(
+                "rate-grpc-metadata",
+                "RATE_LIMIT",
+                """
+                {
+                  "ruleType": "RATE_LIMIT",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 1,
+                  "limitMode": "HEADER",
+                  "limitType": "GRPC_METADATA",
+                  "trafficProtocol": "GRPC",
+                  "executionLocation": "APPLICATION",
+                  "coordinationMode": "GLOBAL_QUOTA",
+                  "keyExtractor": {
+                    "keys": [
+                      {
+                        "name": "tenant-metadata",
+                        "source": "GRPC_METADATA",
+                        "key": "tenant-id",
+                        "required": true
+                      }
+                    ]
+                  },
+                  "limit": {
+                    "quota": 1000,
+                    "windowSeconds": 60
+                  }
+                }
+                """);
+
+        try (StellorbitClient client = client(httpHeaderRule, grpcHeaderRule)) {
+            client.start();
+
+            RateLimitRuleQuery query = new RateLimitRuleQuery(
+                            "payment-service",
+                            null,
+                            RequestContext.builder().tenantId("tenant-a").build())
+                    .withLimitMode("HEADER")
+                    .withLimitType("HEADER")
+                    .withTrafficProtocol("HTTP")
+                    .withExecutionLocation("APPLICATION")
+                    .withCoordinationMode("GLOBAL_QUOTA")
+                    .withKeyExtractorSource("HEADER");
+
+            List<GovernanceRule> rules = client.rateLimits().find(query);
+
+            assertEquals(1, rules.size());
+            GovernanceRule rule = rules.getFirst();
+            assertEquals("rate-http-header", rule.ruleId());
+            assertEquals("HEADER", RateLimitRules.limitMode(rule));
+            assertEquals("SLIDING_WINDOW", RateLimitRules.limitAlgorithm(rule));
+            assertEquals("HTTP", RateLimitRules.trafficProtocol(rule));
+            assertEquals("APPLICATION", RateLimitRules.executionLocation(rule));
+            assertEquals("GLOBAL_QUOTA", RateLimitRules.coordinationMode(rule));
+            assertEquals(List.of("HEADER"), RateLimitRules.keyExtractorSources(rule));
+            assertTrue(RateLimitRules.usesHttpHeaderExtractor(rule));
+        }
+    }
+
+    @Test
+    void exposesDistributedAndLocalRuntimeRateLimitHelpers() {
+        GovernanceRule distributed = rule(
+                "rate-global",
+                "RATE_LIMIT",
+                """
+                {
+                  "ruleType": "RATE_LIMIT",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 0,
+                  "limitMode": "QUOTA",
+                  "trafficProtocol": "HTTP",
+                  "coordinationMode": "GLOBAL_SYNC",
+                  "limit": {
+                    "quota": 100,
+                    "windowSeconds": 60
+                  }
+                }
+                """);
+        GovernanceRule local = rule(
+                "rate-local",
+                "RATE_LIMIT",
+                """
+                {
+                  "ruleType": "RATE_LIMIT",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 1,
+                  "limitMode": "QPS",
+                  "trafficProtocol": "HTTP",
+                  "coordinationMode": "LOCAL_ONLY",
+                  "limit": {
+                    "quota": 100,
+                    "windowSeconds": 60
+                  }
+                }
+                """);
+
+        try (StellorbitClient client = client(distributed, local)) {
+            client.start();
+
+            RateLimitRuleQuery query = new RateLimitRuleQuery(
+                    "payment-service",
+                    null,
+                    RequestContext.builder().tenantId("tenant-a").build());
+
+            List<GovernanceRule> distributedRules = client.rateLimits().distributed(query);
+            List<GovernanceRule> localRules = client.rateLimits().localRuntime(query);
+
+            assertEquals(1, distributedRules.size());
+            assertEquals("rate-global", distributedRules.getFirst().ruleId());
+            assertEquals(1, localRules.size());
+            assertEquals("rate-local", localRules.getFirst().ruleId());
+        }
+    }
+
+    @Test
+    void defaultsMissingLimitModeToQpsAndLocalRuntime() {
+        GovernanceRule legacyQps = rule(
+                "rate-legacy-qps",
+                "RATE_LIMIT",
+                """
+                {
+                  "ruleType": "RATE_LIMIT",
+                  "targetService": "payment-service",
+                  "status": "ACTIVE",
+                  "priority": 0,
+                  "limit": {
+                    "quota": 100,
+                    "windowSeconds": 60
+                  }
+                }
+                """);
+
+        try (StellorbitClient client = client(legacyQps)) {
+            client.start();
+
+            RateLimitRuleQuery query = new RateLimitRuleQuery(
+                            "payment-service",
+                            null,
+                            RequestContext.builder().tenantId("tenant-a").build());
+            List<GovernanceRule> rules = client.rateLimits().find(query.withLimitMode("QPS"));
+            List<GovernanceRule> localRules = client.rateLimits().localRuntime(query);
+
+            assertEquals(1, rules.size());
+            assertEquals("rate-legacy-qps", rules.getFirst().ruleId());
+            assertEquals(1, localRules.size());
+            assertEquals("rate-legacy-qps", localRules.getFirst().ruleId());
+            assertEquals("QPS", RateLimitRules.limitMode(legacyQps));
+            assertEquals("LOCAL_ONLY", RateLimitRules.coordinationMode(legacyQps));
         }
     }
 

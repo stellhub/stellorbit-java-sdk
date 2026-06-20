@@ -215,6 +215,15 @@ legacy `StellorbitHttpClient` path.
 Providers return active rules ordered by priority ascending, revision descending,
 and rule id ascending.
 
+`RateLimitRuleProvider` understands the enterprise rate limit contract at the
+rule-data level. `RateLimitRuleQuery` can filter by `limitMode`, `limitType`,
+`trafficProtocol`, `executionLocation`, `coordinationMode`, and
+`keyExtractor.keys.source`. The provider also exposes `distributed()`,
+`localRuntime()`, `httpHeader()`, and `grpcMetadata()` helpers, while
+`RateLimitRules` exposes stable field readers such as `isDistributedRule()` and
+`limitMode()`. These APIs only classify and expose rules; they do not execute
+token buckets, concurrency leases, custom policies, or model limiters.
+
 ## Rule Format
 
 `stellorbit-service` publishes fixed type-level StellNula configs. The `configId`

@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 public final class GovernanceRuleParser {
 
@@ -165,10 +166,57 @@ public final class GovernanceRuleParser {
     private void requireRulePayload(GovernanceRuleType ruleType, JsonNode root) {
         switch (ruleType) {
             case ROUTE -> requireNode(root, "routes");
-            case RATE_LIMIT -> requireNode(root, "limit");
+            case RATE_LIMIT -> {
+                requireNode(root, "limit");
+                validateRateLimitPayload(root);
+            }
             case CIRCUIT_BREAKER -> requireNode(root, "breaker");
             case AUTH -> requireNode(root, "auth");
             case DEGRADE -> requireNode(root, "degrade");
+        }
+    }
+
+    private void validateRateLimitPayload(JsonNode root) {
+        validateSupported(root, "limitMode", RateLimitRules::supportsLimitMode);
+        validateSupported(root, "limitType", RateLimitRules::supportsLimitType);
+        validateSupported(root, "limitAlgorithm", RateLimitRules::supportsLimitAlgorithm);
+        validateSupported(root, "trafficProtocol", RateLimitRules::supportsTrafficProtocol);
+        validateSupported(root, "executionLocation", RateLimitRules::supportsExecutionLocation);
+        validateSupported(root, "coordinationMode", RateLimitRules::supportsCoordinationMode);
+        validateSupported(root, "enforcementMode", RateLimitRules::supportsEnforcementMode);
+        validateNestedSupported(root, "limit", "algorithm", "limit.algorithm", RateLimitRules::supportsLimitAlgorithm);
+        validateNestedSupported(
+                root, "rateLimit", "algorithm", "rateLimit.algorithm", RateLimitRules::supportsLimitAlgorithm);
+    }
+
+    private void validateSupported(JsonNode root, String fieldName, Predicate<String> supported) {
+        JsonNode node = root.path(fieldName);
+        if (!node.isMissingNode() && !node.isNull()) {
+            if (!node.isValueNode()) {
+                throw new IllegalArgumentException("unsupported rate limit " + fieldName + ": " + node);
+            }
+            String value = node.asText("");
+            if (!supported.test(value)) {
+                throw new IllegalArgumentException("unsupported rate limit " + fieldName + ": " + value);
+            }
+        }
+    }
+
+    private void validateNestedSupported(
+            JsonNode root, String parentName, String fieldName, String displayName, Predicate<String> supported) {
+        JsonNode parent = root.path(parentName);
+        if (!parent.isObject()) {
+            return;
+        }
+        JsonNode node = parent.path(fieldName);
+        if (!node.isMissingNode() && !node.isNull()) {
+            if (!node.isValueNode()) {
+                throw new IllegalArgumentException("unsupported rate limit " + displayName + ": " + node);
+            }
+            String value = node.asText("");
+            if (!supported.test(value)) {
+                throw new IllegalArgumentException("unsupported rate limit " + displayName + ": " + value);
+            }
         }
     }
 
